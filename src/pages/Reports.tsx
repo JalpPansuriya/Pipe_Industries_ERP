@@ -12,13 +12,12 @@ import {
   Cell
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
-import { useApi } from '../hooks/useApi';
 import { formatCurrency } from '../lib/utils';
 import { Download, FileText } from 'lucide-react';
+import { getReports } from '../services/firestoreService';
 
 export const Reports: React.FC = () => {
   const { token } = useAuth();
-  const { fetchWithAuth } = useApi();
   const [reports, setReports] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -26,7 +25,7 @@ export const Reports: React.FC = () => {
   useEffect(() => {
     const fetchReports = async () => {
       try {
-        const data = await fetchWithAuth('/api/reports');
+        const data = await getReports();
         setReports(data);
       } catch (e: any) {
         console.error(e);
@@ -46,7 +45,7 @@ export const Reports: React.FC = () => {
     // Monthly Sales Trend
     csvContent += "Monthly Sales Trend\n";
     csvContent += "Month,Sales\n";
-    reports.salesByMonth?.slice().reverse().forEach((row: any) => {
+    reports.salesByMonth?.forEach((row: any) => {
       csvContent += `${row.month},${row.sales}\n`;
     });
     csvContent += "\n";
@@ -63,7 +62,7 @@ export const Reports: React.FC = () => {
     csvContent += "Top Dealers\n";
     csvContent += "Dealer Name,Total Revenue\n";
     reports.topDealers?.forEach((row: any) => {
-      csvContent += `"${row.name}",${row.total_revenue}\n`;
+      csvContent += `"${row.name}",${row.total_sales}\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -120,7 +119,7 @@ export const Reports: React.FC = () => {
           <h3 className="font-bold text-lg italic serif mb-6">Monthly Sales Trend</h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={reports?.salesByMonth?.slice().reverse() || []}>
+              <BarChart data={reports?.salesByMonth || []}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F0F0F0" />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9CA3AF' }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9CA3AF' }} tickFormatter={(value) => `₹${value / 1000}k`} />

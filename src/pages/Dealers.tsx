@@ -3,12 +3,16 @@ import { Plus, Search, FileText, History, UserPlus, Download } from 'lucide-reac
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useAuth } from '../context/AuthContext';
-import { useApi } from '../hooks/useApi';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, formatDate, cn } from '../lib/utils';
+
+import { 
+  getDealers, 
+  getLedger, 
+  addDealer 
+} from '../services/firestoreService';
 
 export const Dealers: React.FC = () => {
   const { token, user } = useAuth();
-  const { fetchWithAuth } = useApi();
   const [dealers, setDealers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,7 +25,7 @@ export const Dealers: React.FC = () => {
 
   const fetchDealers = async () => {
     try {
-      const data = await fetchWithAuth('/api/dealers');
+      const data = await getDealers();
       setDealers(data);
     } catch (e: any) {
       console.error(e);
@@ -31,9 +35,9 @@ export const Dealers: React.FC = () => {
     }
   };
 
-  const fetchLedger = async (dealerId: number) => {
+  const fetchLedger = async (dealerId: string) => {
     try {
-      const data = await fetchWithAuth(`/api/ledger/${dealerId}`);
+      const data = await getLedger(dealerId);
       setLedger(data);
     } catch (e: any) {
       console.error(e);
@@ -56,10 +60,12 @@ export const Dealers: React.FC = () => {
     const data = Object.fromEntries(formData.entries());
 
     try {
-      await fetchWithAuth('/api/dealers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+      await addDealer({
+        name: data.name as string,
+        gstin: data.gstin as string,
+        pricing_tier: data.pricing_tier as string,
+        address: data.address as string,
+        credit_limit: parseFloat(data.credit_limit as string) || 0
       });
       setIsModalOpen(false);
       fetchDealers();
@@ -78,7 +84,7 @@ export const Dealers: React.FC = () => {
     
     csvContent += "Date,Type,Reference,Amount,Balance\n";
     ledger.forEach((entry: any) => {
-      const date = new Date(entry.date).toLocaleDateString();
+      const date = formatDate(entry.date);
       const type = entry.type;
       const ref = entry.reference || '';
       const amount = entry.amount;
@@ -229,7 +235,7 @@ export const Dealers: React.FC = () => {
                     {entry.type}
                   </span>
                   <span className="text-[10px] font-mono text-gray-400">
-                    {new Date(entry.date).toLocaleDateString()}
+                    {formatDate(entry.date)}
                   </span>
                 </div>
                 <div className="flex justify-between items-end gap-2">
@@ -305,7 +311,7 @@ export const Dealers: React.FC = () => {
             <tbody className="divide-y divide-gray-200">
               {ledger.map((entry) => (
                 <tr key={entry.id}>
-                  <td className="py-3 text-sm">{new Date(entry.date).toLocaleDateString()}</td>
+                  <td className="py-3 text-sm">{formatDate(entry.date)}</td>
                   <td className="py-3 text-sm font-bold">{entry.type}</td>
                   <td className="py-3 text-sm">{entry.reference}</td>
                   <td className={cn(

@@ -1,22 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, FileText, Download, Eye, X, Calculator } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useApi } from '../hooks/useApi';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 import { generateInvoiceSummary } from '../services/geminiService';
 import { InvoicePrintModal } from '../components/InvoicePrintModal';
+import { 
+  getInvoices, 
+  getDealers, 
+  getProducts, 
+  addDealer, 
+  createInvoice 
+} from '../services/firestoreService';
 
 export const Invoices: React.FC = () => {
   const { token } = useAuth();
-  const { fetchWithAuth } = useApi();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [dealers, setDealers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [printInvoiceId, setPrintInvoiceId] = useState<number | null>(null);
-  const [downloadInvoiceId, setDownloadInvoiceId] = useState<number | null>(null);
+  const [printInvoiceId, setPrintInvoiceId] = useState<string | null>(null);
+  const [downloadInvoiceId, setDownloadInvoiceId] = useState<string | null>(null);
 
   // Form State
   const [selectedDealer, setSelectedDealer] = useState<string>('');
@@ -31,9 +36,9 @@ export const Invoices: React.FC = () => {
   const fetchData = async () => {
     try {
       const [invData, dealData, prodData] = await Promise.all([
-        fetchWithAuth('/api/invoices'),
-        fetchWithAuth('/api/dealers'),
-        fetchWithAuth('/api/products')
+        getInvoices(),
+        getDealers(),
+        getProducts()
       ]);
       
       setInvoices(invData);
@@ -107,19 +112,15 @@ export const Invoices: React.FC = () => {
     
     if (isNewDealer) {
       try {
-        const newDealer = await fetchWithAuth('/api/dealers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: newDealerName,
-            gstin: newDealerGstin,
-            address: '',
-            credit_limit: 0,
-            pricing_tier: 'Standard'
-          })
+        const newDealer = await addDealer({
+          name: newDealerName,
+          gstin: newDealerGstin,
+          address: '',
+          credit_limit: 0,
+          pricing_tier: 'Standard'
         });
         
-        finalDealerId = newDealer.id.toString();
+        finalDealerId = newDealer.id;
       } catch (err: any) {
         console.error('Error creating dealer:', err);
         setErrorMsg(err.message || 'An error occurred while creating the dealer');
@@ -128,21 +129,24 @@ export const Invoices: React.FC = () => {
     }
 
     const { total, gst } = calculateTotals();
+    const dealerName = dealers.find(d => d.id === finalDealerId)?.name || newDealerName;
+    
     const payload = {
       dealer_id: finalDealerId,
+      dealer_name: dealerName,
       invoice_no: invoiceNo,
       date: new Date().toISOString().split('T')[0],
       total,
       gst,
-      items: invoiceItems
+      status: 'Issued',
+      items: invoiceItems.map(item => ({
+        ...item,
+        product_name: products.find(p => p.id === item.product_id)?.name || 'Unknown Product'
+      }))
     };
 
     try {
-      const result = await fetchWithAuth('/api/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const newInvoiceId = await createInvoice(payload);
       setIsModalOpen(false);
       setInvoiceItems([]);
       setSelectedDealer('');
@@ -156,10 +160,7 @@ export const Invoices: React.FC = () => {
       const summary = await generateInvoiceSummary(payload);
       setAiSummary(summary);
       
-      // If we have the new ID, we could automatically show the print modal
-      if (result && result.id) {
-        setPrintInvoiceId(result.id);
-      }
+      setPrintInvoiceId(newInvoiceId);
     } catch (e: any) {
       console.error(e);
       setErrorMsg(e.message || 'An error occurred while creating the invoice');

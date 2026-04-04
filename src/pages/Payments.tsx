@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, CreditCard, CheckCircle2, Clock } from 'lucide-react';
+import { Plus, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useApi } from '../hooks/useApi';
-import { formatCurrency, formatDate, cn } from '../lib/utils';
+import { formatCurrency, formatDate } from '../lib/utils';
+import { 
+  getPayments, 
+  getDealers, 
+  getInvoices, 
+  addDealer, 
+  recordPayment 
+} from '../services/firestoreService';
 
 export const Payments: React.FC = () => {
   const { token } = useAuth();
-  const { fetchWithAuth } = useApi();
   const [payments, setPayments] = useState<any[]>([]);
   const [dealers, setDealers] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -21,12 +26,12 @@ export const Payments: React.FC = () => {
   const fetchData = async () => {
     try {
       const [payData, dealData, invData] = await Promise.all([
-        fetchWithAuth('/api/payments'),
-        fetchWithAuth('/api/dealers'),
-        fetchWithAuth('/api/invoices')
+        getPayments(),
+        getDealers(),
+        getInvoices()
       ]);
       
-      setPayments(payData);
+      setPayments(payData as any[]);
       setDealers(dealData);
       setInvoices(invData);
     } catch (e: any) {
@@ -46,43 +51,35 @@ export const Payments: React.FC = () => {
     const formData = new FormData(e.currentTarget);
     const data = Object.fromEntries(formData.entries());
     
-    let finalDealerId = selectedDealer;
-
-    if (isNewDealer) {
-      try {
-        const newDealer = await fetchWithAuth('/api/dealers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: newDealerName,
-            gstin: newDealerGstin,
-            address: '',
-            credit_limit: 0,
-            pricing_tier: 'Standard'
-          })
-        });
-        
-        finalDealerId = newDealer.id.toString();
-      } catch (err: any) {
-        console.error('Error creating dealer:', err);
-        setErrorMsg(err.message || 'An error occurred while creating the dealer');
-        return;
-      }
-    }
-
-    const payload = {
-      ...data,
-      amount: parseFloat(data.amount as string),
-      invoice_id: data.invoice_id ? parseInt(data.invoice_id as string, 10) : null,
-      dealer_id: parseInt(finalDealerId, 10)
-    };
-
     try {
-      await fetchWithAuth('/api/payments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      let finalDealerId = selectedDealer;
+      let finalDealerName = dealers.find(d => d.id === selectedDealer)?.name;
+
+      if (isNewDealer) {
+        const newDealer = await addDealer({
+          name: newDealerName,
+          gstin: newDealerGstin,
+          address: '',
+          credit_limit: 0,
+          pricing_tier: 'Standard'
+        });
+        finalDealerId = newDealer.id!;
+        finalDealerName = newDealerName;
+      }
+
+      const invoice = invoices.find(i => i.id === data.invoice_id);
+
+      const payload = {
+        amount: parseFloat(data.amount as string),
+        method: data.method as string,
+        date: data.date as string,
+        invoice_id: (data.invoice_id as string) || null,
+        invoice_no: invoice?.invoice_no || null,
+        dealer_id: finalDealerId,
+        dealer_name: finalDealerName
+      };
+
+      await recordPayment(payload);
       setSelectedDealer('');
       setIsNewDealer(false);
       setNewDealerName('');

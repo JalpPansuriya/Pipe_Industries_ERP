@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useApi } from '../hooks/useApi';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('admin@samrat.com');
@@ -10,7 +9,6 @@ export const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
-  const { fetchWithAuth } = useApi();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -19,13 +17,7 @@ export const Login: React.FC = () => {
     setError('');
     
     try {
-      const data = await fetchWithAuth('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      
-      login(data.token, data.user);
+      await login(email, password);
       navigate('/');
     } catch (e: any) {
       setError(e.message || 'Login failed');

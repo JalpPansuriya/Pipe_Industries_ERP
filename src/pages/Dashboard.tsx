@@ -19,20 +19,39 @@ import {
   Line
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
-import { useApi } from '../hooks/useApi';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 
+import { getDashboardStats, performMigration } from '../services/firestoreService';
+import { Database as DatabaseIcon, Upload } from 'lucide-react';
+
 export const Dashboard: React.FC = () => {
-  const { token } = useAuth();
-  const { fetchWithAuth } = useApi();
+  const { token, user } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [migrationStatus, setMigrationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+  const handleMigration = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setMigrationStatus('loading');
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      await performMigration(data);
+      setMigrationStatus('success');
+      window.location.reload();
+    } catch (error) {
+      console.error('Migration failed:', error);
+      setMigrationStatus('error');
+    }
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const data = await fetchWithAuth('/api/dashboard/stats');
+        const data = await getDashboardStats();
         setStats(data);
       } catch (e: any) {
         console.error(e);
@@ -156,6 +175,34 @@ export const Dashboard: React.FC = () => {
           </button>
         </div>
       </div>
+      {/* Admin Migration Section */}
+      {user?.role === 'Admin' && (
+        <div className="bg-amber-50 p-6 rounded-xl border border-amber-100 shadow-sm">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="p-2 bg-amber-600 text-white rounded-lg">
+              <DatabaseIcon size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-[#141414]">Legacy Data Migration</h3>
+              <p className="text-xs text-amber-700">Import your existing data from SQLite to Firestore.</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <label className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg font-bold uppercase tracking-widest text-xs cursor-pointer transition-all",
+              migrationStatus === 'loading' ? "bg-amber-200 text-amber-500 pointer-events-none" : "bg-amber-600 text-white hover:bg-amber-700"
+            )}>
+              <Upload size={14} />
+              {migrationStatus === 'loading' ? 'Migrating...' : 'Select sqlite_export.json'}
+              <input type="file" accept=".json" onChange={handleMigration} className="hidden" />
+            </label>
+            
+            {migrationStatus === 'success' && <p className="text-xs text-green-600 font-bold">Migration successful!</p>}
+            {migrationStatus === 'error' && <p className="text-xs text-red-600 font-bold">Migration failed. Check console.</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

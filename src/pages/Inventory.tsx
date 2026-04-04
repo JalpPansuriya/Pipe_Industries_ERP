@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, AlertTriangle, MoreVertical, Edit2, Trash2, History } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useApi } from '../hooks/useApi';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
+import { 
+  getProducts, 
+  getTransactions, 
+  addProduct, 
+  updateProduct, 
+  deleteProduct, 
+  adjustStock 
+} from '../services/firestoreService';
 
 export const Inventory: React.FC = () => {
   const { token, user } = useAuth();
-  const { fetchWithAuth } = useApi();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,7 +28,7 @@ export const Inventory: React.FC = () => {
 
   const fetchProducts = async () => {
     try {
-      const data = await fetchWithAuth('/api/products');
+      const data = await getProducts();
       setProducts(data);
     } catch (e: any) {
       console.error(e);
@@ -32,9 +38,9 @@ export const Inventory: React.FC = () => {
     }
   };
 
-  const fetchTransactions = async (productId: number) => {
+  const fetchTransactions = async (productId: string) => {
     try {
-      const data = await fetchWithAuth(`/api/products/${productId}/transactions`);
+      const data = await getTransactions(productId);
       setTransactions(data);
     } catch (e: any) {
       console.error(e);
@@ -56,20 +62,24 @@ export const Inventory: React.FC = () => {
     const formData = new FormData(e.currentTarget);
     const data = Object.fromEntries(formData.entries());
     
-    const method = editingProduct ? 'PUT' : 'POST';
-    const url = editingProduct ? `/api/products/${editingProduct.id}` : '/api/products';
-
     try {
-      await fetchWithAuth(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...data,
-          price: parseFloat(data.price as string),
-          stock_qty: parseInt(data.stock_qty as string, 10) || 0,
-          low_stock_threshold: parseInt(data.low_stock_threshold as string, 10) || 10
-        })
-      });
+      const productData = {
+        sku: data.sku as string,
+        name: data.name as string,
+        category: data.category as string,
+        unit: data.unit as string,
+        hsn_code: data.hsn_code as string,
+        price: parseFloat(data.price as string),
+        stock_qty: parseInt(data.stock_qty as string, 10) || 0,
+        low_stock_threshold: parseInt(data.low_stock_threshold as string, 10) || 10
+      };
+
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, productData);
+      } else {
+        await addProduct(productData);
+      }
+      
       setIsModalOpen(false);
       setEditingProduct(null);
       fetchProducts();
@@ -79,14 +89,12 @@ export const Inventory: React.FC = () => {
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDeleteProduct = (id: string) => {
     setConfirmAction({
       message: 'Are you sure you want to delete this product?',
       onConfirm: async () => {
         try {
-          await fetchWithAuth(`/api/products/${id}`, {
-            method: 'DELETE'
-          });
+          await deleteProduct(id);
           fetchProducts();
         } catch (e: any) {
           console.error(e);
@@ -99,7 +107,7 @@ export const Inventory: React.FC = () => {
 
   const [adjustType, setAdjustType] = useState('IN');
 
-  const handleAdjustStock = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAdjustStockSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const quantity = parseInt(formData.get('quantity') as string, 10);
@@ -107,15 +115,11 @@ export const Inventory: React.FC = () => {
       setErrorMsg('Please enter a valid quantity');
       return;
     }
-    const type = formData.get('type') as string;
+    const type = formData.get('type') as any;
     const reference = formData.get('reference') as string;
 
     try {
-      await fetchWithAuth(`/api/products/${selectedProduct.id}/adjust-stock`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity, type, reference })
-      });
+      await adjustStock(selectedProduct.id, quantity, type, reference);
       setIsAdjustStockModalOpen(false);
       setSelectedProduct(null);
       fetchProducts();
@@ -228,7 +232,7 @@ export const Inventory: React.FC = () => {
                           <Edit2 size={18} />
                         </button>
                         <button 
-                          onClick={() => handleDelete(product.id)}
+                          onClick={() => handleDeleteProduct(product.id)}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                           title="Delete Product"
                         >
@@ -331,7 +335,7 @@ export const Inventory: React.FC = () => {
               Adjust Stock
             </h3>
             <p className="text-sm text-gray-500 mb-4">{selectedProduct.name} ({selectedProduct.sku})</p>
-            <form onSubmit={handleAdjustStock} className="space-y-4">
+            <form onSubmit={handleAdjustStockSubmit} className="space-y-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Adjustment Type</label>
                 <select 

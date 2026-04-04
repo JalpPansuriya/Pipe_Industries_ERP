@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+import fs from 'fs/promises';
 
 const JWT_SECRET = 'samrat-erp-secret-key-2026';
 
@@ -128,7 +129,7 @@ async function startServer() {
     const authenticateToken = (req: any, res: any, next: any) => {
       const authHeader = req.headers['authorization'];
       const token = authHeader && authHeader.split(' ')[1];
-      
+
       if (!token) {
         console.warn(`Unauthorized access attempt to ${req.url}: No token provided`);
         return res.status(401).json({ message: 'Unauthorized' });
@@ -281,7 +282,7 @@ async function startServer() {
         JOIN dealers d ON i.dealer_id = d.id
         WHERE i.id = ?
       `).get(req.params.id);
-      
+
       if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
       const items = db.prepare(`
@@ -296,7 +297,7 @@ async function startServer() {
 
     app.post('/api/invoices', authenticateToken, (req, res) => {
       const { dealer_id, invoice_no, date, total, gst, items } = req.body;
-      
+
       try {
         const createInvoice = db.transaction(() => {
           // Check stock first
@@ -312,7 +313,7 @@ async function startServer() {
             'INSERT INTO invoices (dealer_id, invoice_no, date, total, gst, status) VALUES (?, ?, ?, ?, ?, ?)'
           ).run(dealer_id, invoice_no, date, total, gst, 'Issued');
           const invoiceId = result.lastInsertRowid;
-          
+
           const insertItem = db.prepare('INSERT INTO invoice_items (invoice_id, product_id, qty, rate, gst_rate) VALUES (?, ?, ?, ?, ?)');
           const updateStock = db.prepare('UPDATE products SET stock_qty = stock_qty - ? WHERE id = ?');
           const logTx = db.prepare('INSERT INTO inventory_transactions (product_id, type, qty, reference_id) VALUES (?, ?, ?, ?)');
@@ -328,7 +329,7 @@ async function startServer() {
           db.prepare('INSERT INTO ledger_entries (dealer_id, type, amount, reference, balance) VALUES (?, ?, ?, ?, ?)').run(
             dealer_id, 'INVOICE', total, `INV-${invoice_no}`, currentBalance
           );
-          
+
           return invoiceId;
         });
 
@@ -359,17 +360,17 @@ async function startServer() {
         }
 
         const invId = invoice_id ? invoice_id : null;
-        
+
         const result = db.prepare(
           'INSERT INTO payments (invoice_id, dealer_id, amount, method, date) VALUES (?, ?, ?, ?, ?)'
         ).run(invId, dealer_id, amount, method, date);
-        
+
         const lastLedger = db.prepare('SELECT balance FROM ledger_entries WHERE dealer_id = ? ORDER BY id DESC LIMIT 1').get(dealer_id) as any;
         const currentBalance = (lastLedger?.balance || 0) - amount;
         db.prepare('INSERT INTO ledger_entries (dealer_id, type, amount, reference, balance) VALUES (?, ?, ?, ?, ?)').run(
           dealer_id, 'PAYMENT', amount, `PAY-${result.lastInsertRowid}`, currentBalance
         );
-        
+
         if (invId) {
           const totalPaid = db.prepare('SELECT SUM(amount) as total FROM payments WHERE invoice_id = ?').get(invId) as any;
           const invoice = db.prepare('SELECT total FROM invoices WHERE id = ?').get(invId) as any;
@@ -426,7 +427,7 @@ async function startServer() {
       const lowStock = db.prepare('SELECT COUNT(*) as count FROM products WHERE stock_qty <= low_stock_threshold').get() as any;
       const recentInvoices = db.prepare('SELECT i.*, d.name as dealer_name FROM invoices i JOIN dealers d ON i.dealer_id = d.id ORDER BY i.date DESC LIMIT 5').all();
       const activeDealers = db.prepare('SELECT COUNT(*) as count FROM dealers').get() as any;
-      
+
       const salesData = db.prepare(`
         SELECT strftime('%w', date) as day_of_week, SUM(total) as sales
         FROM invoices
@@ -456,12 +457,29 @@ async function startServer() {
 
     // Vite middleware for development
     if (process.env.NODE_ENV !== 'production') {
+      console.log('server.ts: Initializing Vite middleware in development mode');
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: 'spa',
       });
-      app.use(vite.middlewares);
+      app.use((req, res, next) => {
+        console.log(`server.ts: Request hitting Vite middleware: ${req.method} ${req.url}`);
+        vite.middlewares(req, res, next);
+      });
+
+      app.get('*', async (req, res, next) => {
+        if (req.originalUrl.startsWith('/api/')) return next();
+        try {
+          const template = await fs.readFile(path.resolve(__dirname, 'index.html'), 'utf-8');
+          const html = await vite.transformIndexHtml(req.originalUrl, template);
+          res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+        } catch (e) {
+          vite.ssrFixStacktrace(e as Error);
+          next(e);
+        }
+      });
     } else {
+      console.log('server.ts: Running in PRODUCTION mode');
       const distPath = path.join(process.cwd(), 'dist');
       app.use(express.static(distPath));
       app.get('*', (req, res) => {

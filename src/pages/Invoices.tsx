@@ -28,6 +28,7 @@ export const Invoices: React.FC = () => {
   const [isNewDealer, setIsNewDealer] = useState(false);
   const [newDealerName, setNewDealerName] = useState('');
   const [newDealerGstin, setNewDealerGstin] = useState('');
+  const [newDealerAddress, setNewDealerAddress] = useState('');
   const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
   const [invoiceNo, setInvoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
   const [isGstInclusive, setIsGstInclusive] = useState(false);
@@ -115,7 +116,7 @@ export const Invoices: React.FC = () => {
         const newDealer = await addDealer({
           name: newDealerName,
           gstin: newDealerGstin,
-          address: '',
+          address: newDealerAddress,
           credit_limit: 0,
           pricing_tier: 'Standard'
         });
@@ -153,6 +154,7 @@ export const Invoices: React.FC = () => {
       setIsNewDealer(false);
       setNewDealerName('');
       setNewDealerGstin('');
+      setNewDealerAddress('');
       setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
       fetchData();
       
@@ -291,6 +293,12 @@ export const Invoices: React.FC = () => {
                         placeholder="GSTIN (Optional)"
                         value={newDealerGstin}
                         onChange={(e) => setNewDealerGstin(e.target.value)}
+                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#141414] focus:border-[#141414] text-sm outline-none transition-all"
+                      />
+                      <input 
+                        placeholder="Address (Optional)"
+                        value={newDealerAddress}
+                        onChange={(e) => setNewDealerAddress(e.target.value)}
                         className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#141414] focus:border-[#141414] text-sm outline-none transition-all"
                       />
                     </div>

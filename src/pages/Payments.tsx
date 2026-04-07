@@ -21,6 +21,7 @@ export const Payments: React.FC = () => {
   const [isNewDealer, setIsNewDealer] = useState(false);
   const [newDealerName, setNewDealerName] = useState('');
   const [newDealerGstin, setNewDealerGstin] = useState('');
+  const [newDealerAddress, setNewDealerAddress] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const fetchData = async () => {
@@ -59,7 +60,7 @@ export const Payments: React.FC = () => {
         const newDealer = await addDealer({
           name: newDealerName,
           gstin: newDealerGstin,
-          address: '',
+          address: newDealerAddress,
           credit_limit: 0,
           pricing_tier: 'Standard'
         });
@@ -84,6 +85,7 @@ export const Payments: React.FC = () => {
       setIsNewDealer(false);
       setNewDealerName('');
       setNewDealerGstin('');
+      setNewDealerAddress('');
       setIsModalOpen(false);
       fetchData();
     } catch (e: any) {
@@ -183,6 +185,12 @@ export const Payments: React.FC = () => {
                       onChange={(e) => setNewDealerGstin(e.target.value)}
                       className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm"
                     />
+                    <input 
+                      placeholder="Address (Optional)"
+                      value={newDealerAddress}
+                      onChange={(e) => setNewDealerAddress(e.target.value)}
+                      className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm"
+                    />
                   </div>
                 ) : (
                   <select 
@@ -240,6 +248,7 @@ export const Payments: React.FC = () => {
                     setIsNewDealer(false);
                     setNewDealerName('');
                     setNewDealerGstin('');
+                    setNewDealerAddress('');
                     setIsModalOpen(false);
                   }}
                   className="flex-1 py-2 text-sm font-bold uppercase tracking-widest text-gray-400 hover:text-[#141414] transition-colors"

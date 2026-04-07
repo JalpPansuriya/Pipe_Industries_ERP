@@ -307,8 +307,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({ invoiceId,
                   <span className="font-extrabold shrink-0">M/s.</span>
                   <div className="font-extrabold uppercase leading-tight">
                     <div className="text-sm">{invoice.dealer_name}</div>
-                    <div>{invoice.dealer_address || ''}</div>
-                    <div className="mt-2">{invoice.dealer_city || ''}</div>
+                    <div className="whitespace-pre-wrap">{invoice.dealer_address || ''}</div>
                   </div>
                 </div>
                 <div className="mt-auto space-y-0.5 font-bold">

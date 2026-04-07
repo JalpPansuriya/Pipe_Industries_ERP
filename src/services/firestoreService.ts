@@ -50,6 +50,8 @@ export interface Invoice {
   id?: string;
   dealer_id: string;
   dealer_name: string;
+  dealer_address?: string;
+  dealer_gstin?: string;
   invoice_no: string;
   date: any;
   total: number;

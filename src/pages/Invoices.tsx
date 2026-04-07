@@ -130,11 +130,16 @@ export const Invoices: React.FC = () => {
     }
 
     const { total, gst } = calculateTotals();
-    const dealerName = dealers.find(d => d.id === finalDealerId)?.name || newDealerName;
+    const dealerObject = dealers.find(d => d.id === finalDealerId);
+    const dealerName = dealerObject?.name || newDealerName;
+    const dealerAddress = dealerObject?.address || newDealerAddress;
+    const dealerGstin = dealerObject?.gstin || newDealerGstin;
     
     const payload = {
       dealer_id: finalDealerId,
       dealer_name: dealerName,
+      dealer_address: dealerAddress,
+      dealer_gstin: dealerGstin,
       invoice_no: invoiceNo,
       date: new Date().toISOString().split('T')[0],
       total,
@@ -295,11 +300,12 @@ export const Invoices: React.FC = () => {
                         onChange={(e) => setNewDealerGstin(e.target.value)}
                         className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#141414] focus:border-[#141414] text-sm outline-none transition-all"
                       />
-                      <input 
-                        placeholder="Address (Optional)"
+                      <textarea 
+                        placeholder="Address"
                         value={newDealerAddress}
                         onChange={(e) => setNewDealerAddress(e.target.value)}
-                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#141414] focus:border-[#141414] text-sm outline-none transition-all"
+                        rows={2}
+                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#141414] focus:border-[#141414] text-sm outline-none transition-all resize-none"
                       />
                     </div>
                   ) : (

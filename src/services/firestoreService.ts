@@ -336,28 +336,47 @@ export const getLedger = async (dealerId: string) => {
 
 // --- Statistics & Dashboard ---
 export const getDashboardStats = async () => {
-  const invoices = await getInvoices();
-  const dealers = await getDealers();
-  
-  const totalSales = invoices.reduce((sum, inv) => sum + inv.total, 0);
-  
-  let outstanding = 0;
-  for (const dealer of dealers) {
-    const q = query(ledgerRef, where("dealer_id", "==", dealer.id), orderBy("date", "desc"), limit(1));
-    const snap = await getDocs(q);
-    outstanding += snap.docs[0]?.data().balance || 0;
+  try {
+    const invoices = await getInvoices();
+    const dealers = await getDealers();
+    
+    const totalSales = invoices.reduce((sum, inv) => sum + inv.total, 0);
+    
+    let outstanding = 0;
+    let outstandingError = false;
+    
+    for (const dealer of dealers) {
+      try {
+        const q = query(ledgerRef, where("dealer_id", "==", dealer.id), orderBy("date", "desc"), limit(1));
+        const snap = await getDocs(q);
+        outstanding += snap.docs[0]?.data().balance || 0;
+      } catch (err) {
+        console.error(`Error fetching ledger for dealer ${dealer.id}:`, err);
+        outstandingError = true;
+      }
+    }
+
+    let lowStock = 0;
+    try {
+      const lowStockQ = query(productsRef, where("stock_qty", "<=", 10));
+      const lowStockSnap = await getDocs(lowStockQ);
+      lowStock = lowStockSnap.size;
+    } catch (err) {
+      console.error("Error fetching low stock:", err);
+    }
+
+    return {
+      totalSales,
+      outstanding: outstandingError ? null : outstanding,
+      lowStock,
+      activeDealers: dealers.length,
+      recentInvoices: invoices.slice(0, 5),
+      hasIndexingError: outstandingError
+    };
+  } catch (error: any) {
+    console.error("Failed to fetch dashboard stats:", error);
+    throw error;
   }
-
-  const lowStockQ = query(productsRef, where("stock_qty", "<=", 10));
-  const lowStockSnap = await getDocs(lowStockQ);
-
-  return {
-    totalSales,
-    outstanding,
-    lowStock: lowStockSnap.size,
-    activeDealers: dealers.length,
-    recentInvoices: invoices.slice(0, 5)
-  };
 };
 
 export const getReports = async () => {

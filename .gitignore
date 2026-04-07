@@ -9,3 +9,4 @@ coverage/
 *.sqlite
 sqlite_export.json
 database.sqlite
+.vercel

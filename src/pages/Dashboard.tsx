@@ -49,18 +49,51 @@ export const Dashboard: React.FC = () => {
   if (loading) return <div className="flex items-center justify-center h-full">Loading...</div>;
 
   if (errorMsg) {
+    const isIndexError = errorMsg.includes('index') || errorMsg.includes('composite');
+    const indexLink = errorMsg.match(/https:\/\/console\.firebase\.google\.com[^\s]*/)?.[0];
+
     return (
-      <div className="flex flex-col items-center justify-center h-full space-y-4">
-        <div className="p-4 bg-red-50 text-red-600 rounded-xl border border-red-100 flex flex-col items-center max-w-md text-center">
-          <AlertTriangle size={48} className="mb-4" />
-          <h3 className="text-lg font-bold mb-2">Failed to Load Dashboard</h3>
-          <p className="text-sm opacity-80 mb-4">{errorMsg}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-widest hover:bg-red-700 transition-colors"
-          >
-            Retry
-          </button>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
+        <div className="p-8 bg-white border border-red-100 rounded-2xl shadow-xl shadow-red-500/5 max-w-lg w-full text-center">
+          <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle size={32} />
+          </div>
+          
+          <h3 className="text-xl font-bold text-[#141414] mb-3">
+            {isIndexError ? 'Database Index Required' : 'Failed to Load Dashboard'}
+          </h3>
+          
+          <p className="text-gray-500 text-sm leading-relaxed mb-8">
+            {isIndexError 
+              ? 'This complex query needs a specific index in Firestore to run. You can create it instantly by clicking the button below.'
+              : errorMsg}
+          </p>
+
+          <div className="flex flex-col gap-3">
+            {indexLink && (
+              <a 
+                href={indexLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-red-600 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-600/20"
+              >
+                Create Firestore Index
+              </a>
+            )}
+            
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-gray-100 text-gray-600 px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-gray-200 transition-all"
+            >
+              Retry Dashboard
+            </button>
+          </div>
+
+          {isIndexError && (
+            <p className="mt-6 text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+              Note: Index creation usually takes 2-5 minutes in Firebase.
+            </p>
+          )}
         </div>
       </div>
     );

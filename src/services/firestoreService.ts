@@ -144,6 +144,22 @@ export const updateDealer = async (id: string, dealer: Partial<Dealer>) => {
   return await updateDoc(docRef, dealer);
 };
 
+export const deleteDealer = async (id: string) => {
+  const docRef = doc(db, "dealers", id);
+  return await deleteDoc(docRef);
+};
+
+export const clearAllDatabaseData = async () => {
+  const collections = ["products", "dealers", "invoices", "payments", "ledger", "inventory_transactions"];
+  
+  for (const collectionName of collections) {
+    const colRef = collection(db, collectionName);
+    const snapshot = await getDocs(colRef);
+    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+  }
+};
+
 // --- Invoice Services ---
 export const getInvoices = async (): Promise<Invoice[]> => {
   const q = query(invoicesRef, orderBy("date", "desc"));

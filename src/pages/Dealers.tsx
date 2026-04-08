@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, FileText, History, UserPlus, Download } from 'lucide-react';
+import { Plus, Search, FileText, History, UserPlus, Download, Trash2, AlertTriangle } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useAuth } from '../context/AuthContext';
@@ -8,7 +8,8 @@ import { formatCurrency, formatDate, cn } from '../lib/utils';
 import { 
   getDealers, 
   getLedger, 
-  addDealer 
+  addDealer,
+  deleteDealer
 } from '../services/firestoreService';
 
 export const Dealers: React.FC = () => {
@@ -21,6 +22,7 @@ export const Dealers: React.FC = () => {
   const [ledger, setLedger] = useState<any[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const statementRef = useRef<HTMLDivElement>(null);
 
   const fetchDealers = async () => {
@@ -53,6 +55,25 @@ export const Dealers: React.FC = () => {
     d.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     d.gstin?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (deletingId === id) {
+      try {
+        await deleteDealer(id);
+        setDealers(dealers.filter(d => d.id !== id));
+        if (selectedDealer?.id === id) setSelectedDealer(null);
+        setDeletingId(null);
+      } catch (e: any) {
+        console.error(e);
+        setErrorMsg(e.message || 'Failed to delete dealer');
+      }
+    } else {
+      setDeletingId(id);
+      // Auto-reset after 3 seconds
+      setTimeout(() => setDeletingId(prev => prev === id ? null : prev), 3000);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -179,7 +200,7 @@ export const Dealers: React.FC = () => {
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">GSTIN</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Tier</th>
                   <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Credit Limit</th>
-                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-right">History</th>
+                  <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -200,8 +221,31 @@ export const Dealers: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm font-bold text-[#141414]">{formatCurrency(dealer.credit_limit)}</td>
-                    <td className="px-6 py-4 text-right">
-                      <History size={18} className="text-gray-400 group-hover:text-[#141414] transition-colors inline-block" />
+                    <td className="px-6 py-4 text-right space-x-4">
+                      <button 
+                        onClick={() => { setSelectedDealer(dealer); fetchLedger(dealer.id); }}
+                        className="text-gray-400 hover:text-[#141414] transition-colors"
+                      >
+                        <History size={18} />
+                      </button>
+                      <button 
+                        onClick={(e) => handleDelete(dealer.id, e)}
+                        className={cn(
+                          "transition-all duration-200 p-1.5 rounded-lg",
+                          deletingId === dealer.id 
+                            ? "bg-red-50 text-red-600 ring-1 ring-red-200 px-3 flex items-center gap-2" 
+                            : "text-gray-400 hover:text-red-600 hover:bg-red-50"
+                        )}
+                      >
+                        {deletingId === dealer.id ? (
+                          <>
+                            <AlertTriangle size={14} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Confirm?</span>
+                          </>
+                        ) : (
+                          <Trash2 size={18} />
+                        )}
+                      </button>
                     </td>
                   </tr>
                 ))}

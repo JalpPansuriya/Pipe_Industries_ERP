@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, AlertTriangle, MoreVertical, Edit2, Trash2, History } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import { Plus, Search, FileText, MoreVertical, Edit2, Trash2, History, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 import { 
@@ -20,11 +22,12 @@ export const Inventory: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<any>(null);
 
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [isAdjustStockModalOpen, setIsAdjustStockModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{message: string, onConfirm: () => void} | null>(null);
+  const printRef = React.useRef<HTMLDivElement>(null);
 
   const fetchProducts = async () => {
     try {
@@ -105,28 +108,34 @@ export const Inventory: React.FC = () => {
     });
   };
 
-  const [adjustType, setAdjustType] = useState('IN');
-
-  const handleAdjustStockSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const quantity = parseInt(formData.get('quantity') as string, 10);
-    if (isNaN(quantity)) {
-      setErrorMsg('Please enter a valid quantity');
-      return;
-    }
-    const type = formData.get('type') as any;
-    const reference = formData.get('reference') as string;
-
-    try {
-      await adjustStock(selectedProduct.id, quantity, type, reference);
-      setIsAdjustStockModalOpen(false);
-      setSelectedProduct(null);
-      fetchProducts();
-    } catch (e: any) {
-      console.error(e);
-      setErrorMsg(e.message || 'An error occurred while adjusting stock');
-    }
+  const handleExportPDF = async () => {
+    if (products.length === 0 || !printRef.current) return;
+    
+    setIsExporting(true);
+    // Wait for state update to show print template
+    setTimeout(async () => {
+      try {
+        const canvas = await html2canvas(printRef.current!, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`Product_Catalogue_${new Date().toISOString().split('T')[0]}.pdf`);
+      } catch (e) {
+        console.error('PDF Export failed:', e);
+        setErrorMsg('Failed to generate PDF');
+      } finally {
+        setIsExporting(false);
+      }
+    }, 100);
   };
 
   if (loading) return <div>Loading...</div>;
@@ -135,18 +144,27 @@ export const Inventory: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-[#141414]">Inventory</h2>
-          <p className="text-gray-500 mt-1">Manage your product catalogue and stock levels.</p>
+          <h2 className="text-3xl font-bold tracking-tight text-[#141414]">Products</h2>
+          <p className="text-gray-500 mt-1">Manage your product catalogue and pricing.</p>
         </div>
-        {user?.role === 'Admin' && (
+        <div className="flex items-center gap-3">
           <button 
-            onClick={() => { setEditingProduct(null); setIsModalOpen(true); }}
-            className="flex items-center gap-2 bg-[#141414] text-white px-4 py-2 rounded-lg font-medium hover:bg-black transition-colors"
+            onClick={() => handleExportPDF()}
+            className="flex items-center gap-2 bg-white text-gray-600 px-4 py-2 rounded-lg font-medium border border-gray-200 hover:bg-gray-50 transition-colors"
           >
-            <Plus size={18} />
-            <span>Add Product</span>
+            <Download size={18} />
+            <span>Export PDF</span>
           </button>
-        )}
+          {user?.role === 'Admin' && (
+            <button 
+              onClick={() => { setEditingProduct(null); setIsModalOpen(true); }}
+              className="flex items-center gap-2 bg-[#141414] text-white px-4 py-2 rounded-lg font-medium hover:bg-black transition-colors"
+            >
+              <Plus size={18} />
+              <span>Add Product</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -168,37 +186,22 @@ export const Inventory: React.FC = () => {
         <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">SKU</th>
+              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 w-16">S.No</th>
+              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Code / SKU</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Product Name</th>
-              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Category</th>
-              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Stock</th>
+              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-center">HSN Code</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Price</th>
-              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Status</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filteredProducts.map((product) => (
+            {filteredProducts.map((product, index) => (
               <tr key={product.id} className="hover:bg-gray-50 transition-colors group">
+                <td className="px-6 py-4 text-sm font-bold text-gray-400">{index + 1}</td>
                 <td className="px-6 py-4 text-sm font-mono text-gray-500">{product.sku}</td>
                 <td className="px-6 py-4 text-sm font-bold text-[#141414]">{product.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{product.category}</td>
-                <td className="px-6 py-4 text-sm font-bold text-[#141414]">
-                  {product.stock_qty} <span className="text-gray-400 font-normal text-xs">{product.unit}</span>
-                </td>
+                <td className="px-6 py-4 text-sm font-bold text-center text-gray-500">{product.hsn_code || '---'}</td>
                 <td className="px-6 py-4 text-sm font-bold text-[#141414]">{formatCurrency(product.price)}</td>
-                <td className="px-6 py-4">
-                  {product.stock_qty <= product.low_stock_threshold ? (
-                    <span className="flex items-center gap-1.5 text-orange-600 text-[10px] font-bold uppercase tracking-widest bg-orange-50 px-2 py-1 rounded">
-                      <AlertTriangle size={12} />
-                      Low Stock
-                    </span>
-                  ) : (
-                    <span className="text-green-600 text-[10px] font-bold uppercase tracking-widest bg-green-50 px-2 py-1 rounded">
-                      In Stock
-                    </span>
-                  )}
-                </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-2 transition-opacity">
                     <button 
@@ -208,22 +211,12 @@ export const Inventory: React.FC = () => {
                         setIsHistoryModalOpen(true);
                       }}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                      title="View History"
+                      title="Billing History"
                     >
                       <History size={18} />
                     </button>
                     {user?.role === 'Admin' && (
                       <>
-                        <button 
-                          onClick={() => {
-                            setSelectedProduct(product);
-                            setIsAdjustStockModalOpen(true);
-                          }}
-                          className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
-                          title="Adjust Stock"
-                        >
-                          <Plus size={18} />
-                        </button>
                         <button 
                           onClick={() => { setEditingProduct(product); setIsModalOpen(true); }}
                           className="p-2 text-gray-400 hover:text-[#141414] hover:bg-gray-100 rounded-lg transition-all"
@@ -273,22 +266,16 @@ export const Inventory: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Unit</label>
-                  <input name="unit" defaultValue={editingProduct?.unit} placeholder="e.g. Nos, Mtr" className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
+                  <input name="unit" defaultValue={editingProduct?.unit || 'Nos'} placeholder="e.g. Nos, Mtr" className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Category</label>
-                  <input name="category" defaultValue={editingProduct?.category} className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
+                  <input name="category" defaultValue={editingProduct?.category || 'General'} className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Price (₹)</label>
-                  <input name="price" type="number" step="0.01" defaultValue={editingProduct?.price} required className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Threshold</label>
-                  <input name="low_stock_threshold" type="number" defaultValue={editingProduct?.low_stock_threshold || 10} className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
-                </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Price (₹)</label>
+                <input name="price" type="number" step="0.01" defaultValue={editingProduct?.price} required className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
               </div>
               {!editingProduct && (
                 <div className="space-y-1">
@@ -320,63 +307,6 @@ export const Inventory: React.FC = () => {
                   className="flex-1 bg-[#141414] text-white py-2 rounded-lg font-bold uppercase tracking-widest hover:bg-black transition-colors"
                 >
                   Save Product
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Adjust Stock Modal */}
-      {isAdjustStockModalOpen && selectedProduct && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl">
-            <h3 className="text-2xl font-bold italic serif mb-6">
-              Adjust Stock
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">{selectedProduct.name} ({selectedProduct.sku})</p>
-            <form onSubmit={handleAdjustStockSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Adjustment Type</label>
-                <select 
-                  name="type" 
-                  required 
-                  value={adjustType}
-                  onChange={(e) => setAdjustType(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm"
-                >
-                  <option value="IN">Stock In (+)</option>
-                  <option value="OUT">Stock Out (-)</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Quantity</label>
-                <input 
-                  name="quantity" 
-                  type="number" 
-                  min="1" 
-                  max={adjustType === 'OUT' ? selectedProduct.stock_qty : undefined}
-                  required 
-                  className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" 
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Reference / Reason</label>
-                <input name="reference" placeholder="e.g. Manual Adjustment, Damaged" required className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button 
-                  type="button" 
-                  onClick={() => setIsAdjustStockModalOpen(false)}
-                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-[#141414] text-white rounded-lg font-medium hover:bg-black transition-colors"
-                >
-                  Update Stock
                 </button>
               </div>
             </form>
@@ -466,22 +396,65 @@ export const Inventory: React.FC = () => {
         </div>
       )}
 
+      {/* Print Template (Hidden) */}
+      <div className="fixed -left-[2000px] top-0 shadow-none pointer-events-none">
+        <div ref={printRef} className="p-12 w-[800px] bg-white text-[#141414]">
+          <div className="flex justify-between items-start mb-8 border-b-2 border-[#141414] pb-6">
+            <div>
+              <h1 className="text-4xl font-bold tracking-tight italic serif">SAMRAT PIPE</h1>
+              <p className="text-xs uppercase tracking-[0.2em] mt-2 opacity-60">Product Catalogue</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold">{new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            </div>
+          </div>
+          
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-gray-200 text-left">
+                <th className="py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 w-12">S.No</th>
+                <th className="py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">SKU / Code</th>
+                <th className="py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">Product Name</th>
+                <th className="py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-center">HSN</th>
+                <th className="py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-right">Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((p, i) => (
+                <tr key={p.id} className="border-b border-gray-100 italic">
+                  <td className="py-3 text-sm text-gray-400">{i + 1}</td>
+                  <td className="py-3 text-sm font-mono text-gray-600">{p.sku}</td>
+                  <td className="py-3 text-sm font-bold">{p.name}</td>
+                  <td className="py-3 text-sm text-center text-gray-500">{p.hsn_code || '---'}</td>
+                  <td className="py-3 text-sm font-bold text-right">{formatCurrency(p.price)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          
+          <div className="mt-12 pt-8 border-t border-gray-100 flex justify-between items-center text-[10px] uppercase tracking-widest text-gray-400">
+            <p>© {new Date().getFullYear()} SAMRAT PIPE INDUSTRIES</p>
+            <p>Generated by ERP System</p>
+          </div>
+        </div>
+      </div>
+
       {/* Confirm Modal */}
       {confirmAction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-xl font-bold text-[#141414] mb-4">Confirm Action</h3>
             <p className="text-gray-600 mb-6">{confirmAction.message}</p>
-            <div className="flex gap-3 justify-end">
+            <div className="flex justify-end gap-3">
               <button
                 onClick={() => setConfirmAction(null)}
-                className="px-4 py-2 text-sm font-bold uppercase tracking-widest text-gray-400 hover:text-[#141414] transition-colors"
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmAction.onConfirm}
-                className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold uppercase tracking-widest hover:bg-red-700 transition-colors"
+                className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors"
               >
                 Confirm
               </button>

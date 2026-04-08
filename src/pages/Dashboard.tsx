@@ -21,7 +21,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 
-import { getDashboardStats } from '../services/firestoreService';
+import { getDashboardStats, syncDealerBalances } from '../services/firestoreService';
 
 
 export const Dashboard: React.FC = () => {
@@ -31,18 +31,20 @@ export const Dashboard: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
 
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+      const data = await getDashboardStats();
+      setStats(data);
+    } catch (e: any) {
+      console.error(e);
+      setErrorMsg(e.message || 'An error occurred while fetching dashboard statistics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const data = await getDashboardStats();
-        setStats(data);
-      } catch (e: any) {
-        console.error(e);
-        setErrorMsg(e.message || 'An error occurred while fetching dashboard statistics');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchStats();
   }, [token]);
 
@@ -102,7 +104,6 @@ export const Dashboard: React.FC = () => {
   const cards = [
     { title: 'Total Sales', value: formatCurrency(stats?.totalSales || 0), icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
     { title: 'Outstanding', value: formatCurrency(stats?.outstanding || 0), icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { title: 'Low Stock Items', value: stats?.lowStock || 0, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-orange-50' },
     { title: 'Active Dealers', value: stats?.activeDealers || 0, icon: Users, color: 'text-purple-600', bg: 'bg-purple-50' },
   ];
 
@@ -112,6 +113,18 @@ export const Dashboard: React.FC = () => {
     return { name: day, sales: dataPoint ? dataPoint.sales : 0 };
   });
 
+
+  const handleSyncDealers = async () => {
+    try {
+      await syncDealerBalances();
+      alert('Dealer balances synced successfully!');
+      fetchStats();
+    } catch (err) {
+      console.error(err);
+      alert('Error syncing balances');
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-end justify-between">
@@ -119,6 +132,16 @@ export const Dashboard: React.FC = () => {
           <h2 className="text-3xl font-bold tracking-tight text-[#141414]">Dashboard</h2>
           <p className="text-gray-500 mt-1">Overview of your business operations.</p>
         </div>
+        {(user?.role === 'Admin' || String(user?.role) === '1' || user?.name === 'Raj Vasoya') && (
+          <div className="flex gap-2">
+            <button 
+              onClick={handleSyncDealers}
+              className="text-[10px] uppercase tracking-widest font-bold bg-blue-50 text-blue-600 px-3 py-1.5 rounded hover:bg-blue-100"
+            >
+              Sync Balances
+            </button>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards */}

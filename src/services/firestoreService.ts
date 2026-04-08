@@ -12,7 +12,8 @@ import {
   limit, 
   runTransaction,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  increment
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
@@ -176,25 +177,8 @@ export const getInvoice = async (id: string): Promise<Invoice> => {
 
 export const createInvoice = async (invoiceData: Omit<Invoice, 'id'>) => {
   return await runTransaction(db, async (transaction) => {
-    // 1. Check & Update Stock for each product
+    // 1. Log billing transaction for history
     for (const item of invoiceData.items) {
-      const productRef = doc(db, "products", item.product_id);
-      const productDoc = await transaction.get(productRef);
-      
-      if (!productDoc.exists()) {
-        throw new Error(`Product ${item.product_name} not found`);
-      }
-      
-      const currentStock = productDoc.data().stock_qty || 0;
-      if (currentStock < item.qty) {
-        throw new Error(`Insufficient stock for ${item.product_name}. Available: ${currentStock}`);
-      }
-      
-      transaction.update(productRef, {
-        stock_qty: currentStock - item.qty
-      });
-      
-      // Log transaction
       const txRef = doc(collection(db, "inventory_transactions"));
       transaction.set(txRef, {
         product_id: item.product_id,
@@ -231,6 +215,12 @@ export const createInvoice = async (invoiceData: Omit<Invoice, 'id'>) => {
       reference: `INV-${invoiceData.invoice_no}`,
       balance: lastBalance + invoiceData.total,
       date: serverTimestamp()
+    });
+
+    // 4. Update Dealer Outstanding Balance (Denormalized)
+    const dealerRef = doc(db, "dealers", invoiceData.dealer_id);
+    transaction.update(dealerRef, {
+      outstanding_balance: increment(invoiceData.total)
     });
 
     return invRef.id;
@@ -338,6 +328,12 @@ export const recordPayment = async (paymentData: any) => {
       transaction.update(invRef, { status: 'Paid' });
     }
 
+    // 4. Update Dealer Outstanding Balance (Denormalized)
+    const dealerRef = doc(db, "dealers", paymentData.dealer_id);
+    transaction.update(dealerRef, {
+      outstanding_balance: increment(-paymentData.amount)
+    });
+
     return payRef.id;
   });
 };
@@ -354,46 +350,44 @@ export const getLedger = async (dealerId: string) => {
 
 // --- Statistics & Dashboard ---
 export const getDashboardStats = async () => {
+  const startTime = Date.now();
   try {
-    const invoices = await getInvoices();
-    const dealers = await getDealers();
+    const [invoices, dealers] = await Promise.all([
+      getInvoices(),
+      getDealers()
+    ]);
     
     const totalSales = invoices.reduce((sum, inv) => sum + inv.total, 0);
+    const outstanding = dealers.reduce((sum, d) => sum + (d.outstanding_balance || 0), 0);
     
-    let outstanding = 0;
-    let outstandingError = false;
+    const lowStock = 0;
+
+    console.log(`Stats fetched in ${Date.now() - startTime}ms`);
     
-    for (const dealer of dealers) {
-      try {
-        const q = query(ledgerRef, where("dealer_id", "==", dealer.id), orderBy("date", "desc"), limit(1));
-        const snap = await getDocs(q);
-        outstanding += snap.docs[0]?.data().balance || 0;
-      } catch (err) {
-        console.error(`Error fetching ledger for dealer ${dealer.id}:`, err);
-        outstandingError = true;
-      }
-    }
-
-    let lowStock = 0;
-    try {
-      const lowStockQ = query(productsRef, where("stock_qty", "<=", 10));
-      const lowStockSnap = await getDocs(lowStockQ);
-      lowStock = lowStockSnap.size;
-    } catch (err) {
-      console.error("Error fetching low stock:", err);
-    }
-
     return {
       totalSales,
-      outstanding: outstandingError ? null : outstanding,
+      outstanding,
       lowStock,
       activeDealers: dealers.length,
       recentInvoices: invoices.slice(0, 5),
-      hasIndexingError: outstandingError
+      hasIndexingError: false
     };
   } catch (error: any) {
     console.error("Failed to fetch dashboard stats:", error);
     throw error;
+  }
+};
+
+export const syncDealerBalances = async () => {
+  const dealers = await getDealers();
+  for (const dealer of dealers) {
+    const q = query(ledgerRef, where("dealer_id", "==", dealer.id), orderBy("date", "desc"), limit(1));
+    const snap = await getDocs(q);
+    const actualBalance = snap.docs[0]?.data().balance || 0;
+    
+    const dealerRef = doc(db, "dealers", dealer.id);
+    await updateDoc(dealerRef, { outstanding_balance: actualBalance });
+    console.log(`Synced balance for ${dealer.name}: ${actualBalance}`);
   }
 };
 
@@ -430,3 +424,4 @@ export const getReports = async () => {
 
   return { salesByMonth, paymentMethods, topDealers };
 };
+

@@ -70,7 +70,7 @@ export const Invoices: React.FC = () => {
     
     if (field === 'qty') {
       const productId = newItems[index].product_id;
-      const product = products.find(p => p.id === parseInt(productId));
+      const product = products.find(p => p.id === productId);
       if (product && value > product.stock_qty) {
         setErrorMsg(`Cannot add more than available stock (${product.stock_qty} ${product.unit})`);
         return;
@@ -79,8 +79,10 @@ export const Invoices: React.FC = () => {
 
     newItems[index][field] = value;
     if (field === 'product_id') {
-      const prod = products.find(p => p.id === parseInt(value));
-      if (prod) newItems[index].rate = prod.price;
+      const prod = products.find(p => p.id === value);
+      if (prod) {
+        newItems[index].rate = prod.price || 0;
+      }
     }
     setInvoiceItems(newItems);
   };
@@ -352,7 +354,7 @@ export const Invoices: React.FC = () => {
                 <div className="space-y-3">
                   {invoiceItems.map((item, index) => (
                     <div key={index} className="flex flex-wrap md:grid md:grid-cols-12 gap-3 items-end bg-gray-50 p-3 rounded-lg">
-                      <div className="w-full md:col-span-4 space-y-1">
+                      <div className="flex-1 md:col-span-4 space-y-1">
                         <label className="text-[8px] font-bold uppercase tracking-widest text-gray-400">Product</label>
                         <select 
                           required
@@ -364,16 +366,16 @@ export const Invoices: React.FC = () => {
                           {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.stock_qty} left)</option>)}
                         </select>
                       </div>
-                      <div className="w-[22%] md:col-span-2 space-y-1">
+                      <div className="w-[60px] md:col-span-1 space-y-1">
                         <label className="text-[8px] font-bold uppercase tracking-widest text-gray-400">Qty</label>
                         <input 
                           type="number" 
                           value={item.qty}
                           onChange={(e) => updateItem(index, 'qty', parseInt(e.target.value) || 0)}
-                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:ring-1 focus:ring-[#141414] focus:border-[#141414] text-xs outline-none transition-all"
+                          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:ring-1 focus:ring-[#141414] focus:border-[#141414] text-xs outline-none transition-all text-center"
                         />
                       </div>
-                      <div className="w-[28%] md:col-span-2 space-y-1">
+                      <div className="w-[100px] md:col-span-3 space-y-1">
                         <label className="text-[8px] font-bold uppercase tracking-widest text-gray-400">Rate</label>
                         <input 
                           type="number" 
@@ -382,7 +384,7 @@ export const Invoices: React.FC = () => {
                           className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:ring-1 focus:ring-[#141414] focus:border-[#141414] text-xs outline-none transition-all"
                         />
                       </div>
-                      <div className="w-[32%] md:col-span-2 space-y-1">
+                      <div className="w-[80px] md:col-span-2 space-y-1">
                         <label className="text-[8px] font-bold uppercase tracking-widest text-gray-400">GST %</label>
                         <select 
                           value={item.gst_rate}
@@ -395,13 +397,13 @@ export const Invoices: React.FC = () => {
                           <option value={28}>28%</option>
                         </select>
                       </div>
-                      <div className="flex-1 md:col-span-1 text-right pb-2 min-w-[60px]">
+                      <div className="flex-1 md:col-span-1 text-right pb-2 min-w-[70px]">
                         <p className="text-[10px] font-bold">
                           {formatCurrency(isGstInclusive ? (item.qty * (item.rate / (1 + item.gst_rate / 100))) : (item.qty * item.rate))}
                         </p>
                       </div>
-                      <div className="w-auto md:col-span-1 text-right pb-1">
-                        <button type="button" onClick={() => removeItem(index)} className="text-gray-300 hover:text-red-500">
+                      <div className="w-auto md:col-span-1 text-right pb-2">
+                        <button type="button" onClick={() => removeItem(index)} className="text-gray-300 hover:text-red-500 p-1">
                           <X size={14} />
                         </button>
                       </div>

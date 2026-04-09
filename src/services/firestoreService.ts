@@ -273,6 +273,51 @@ export const createInvoice = async (invoiceData: Omit<Invoice, 'id'>) => {
   });
 };
 
+export const deleteInvoice = async (invoiceId: string) => {
+  return await runTransaction(db, async (transaction) => {
+    const invRef = doc(db, "invoices", invoiceId);
+    const invSnap = await transaction.get(invRef);
+    if (!invSnap.exists()) throw new Error("Invoice not found");
+    const invoiceData = invSnap.data() as Invoice;
+
+    // 1. Decrement Dealer Outstanding Balance
+    const dealerRef = doc(db, "dealers", invoiceData.dealer_id);
+    transaction.update(dealerRef, {
+      outstanding_balance: increment(-invoiceData.total)
+    });
+
+    // 2. Add VOID entry to Ledger
+    const lastLedgerQ = query(
+      ledgerRef, 
+      where("dealer_id", "==", invoiceData.dealer_id),
+      orderBy("date", "desc"),
+      limit(1)
+    );
+    const lastLedgerSnap = await getDocs(lastLedgerQ);
+    const lastBalance = lastLedgerSnap.docs[0]?.data().balance || 0;
+    
+    const ledgerEntryRef = doc(collection(db, "ledger"));
+    transaction.set(ledgerEntryRef, {
+      dealer_id: invoiceData.dealer_id,
+      type: 'INVOICE_VOIDED',
+      amount: -invoiceData.total,
+      reference: `VOID-${invoiceData.invoice_no}`,
+      balance: lastBalance - invoiceData.total,
+      date: serverTimestamp()
+    });
+
+    // 3. Clean up inventory transactions
+    const txQ = query(collection(db, "inventory_transactions"), where("reference_id", "==", `INV-${invoiceData.invoice_no}`));
+    const txSnap = await getDocs(txQ);
+    txSnap.docs.forEach(doc => {
+      transaction.delete(doc.ref);
+    });
+
+    // 4. Delete Invoice Document
+    transaction.delete(invRef);
+  });
+};
+
 export const performMigration = async (data: any) => {
   return await runTransaction(db, async (transaction) => {
     // 1. Migrate Users

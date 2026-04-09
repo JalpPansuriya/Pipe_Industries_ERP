@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, FileText, Download, Eye, X, Calculator } from 'lucide-react';
+import { Plus, Search, FileText, Download, Eye, X, Calculator, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 import { generateInvoiceSummary } from '../services/geminiService';
@@ -10,7 +10,8 @@ import {
   getProducts, 
   addDealer, 
   createInvoice,
-  getNextInvoiceNumber 
+  getNextInvoiceNumber,
+  deleteInvoice 
 } from '../services/firestoreService';
 
 export const Invoices: React.FC = () => {
@@ -34,6 +35,8 @@ export const Invoices: React.FC = () => {
   const [invoiceNo, setInvoiceNo] = useState('');
   const [isGstInclusive, setIsGstInclusive] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [deleteConfirmationId, setDeleteConfirmationId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -166,6 +169,22 @@ export const Invoices: React.FC = () => {
     }
   };
 
+  const handleDeleteInvoice = async () => {
+    if (!deleteConfirmationId) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteInvoice(deleteConfirmationId);
+      setDeleteConfirmationId(null);
+      fetchData();
+    } catch (e: any) {
+      console.error(e);
+      setErrorMsg(e.message || "Failed to delete invoice");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (loading) return <div>Loading...</div>;
 
   const { subtotal, gst, total } = calculateTotals();
@@ -246,6 +265,13 @@ export const Invoices: React.FC = () => {
                     title="Download Invoice"
                   >
                     <Download size={18} />
+                  </button>
+                  <button 
+                    onClick={() => setDeleteConfirmationId(inv.id)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    title="Delete Invoice"
+                  >
+                    <Trash2 size={18} />
                   </button>
                 </td>
               </tr>
@@ -461,6 +487,45 @@ export const Invoices: React.FC = () => {
           autoDownload={true}
         />
       )}
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmationId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl">
+            <div className="flex items-center gap-4 mb-6 text-red-600">
+              <div className="p-3 bg-red-50 rounded-xl">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-xl font-bold italic serif">Secure Deletion</h3>
+            </div>
+            
+            <p className="text-gray-600 mb-6 leading-relaxed">
+              Are you sure you want to delete this invoice? This will:
+              <br /><span className="font-bold text-[#141414]">• Reverse the dealer's balance impact</span>
+              <br /><span className="font-bold text-[#141414]">• Permanentely remove the invoice record</span>
+              <br /><span className="font-bold text-[#141414]">• Record a VOID entry in the ledger</span>
+            </p>
+
+            <div className="flex gap-3 mt-8">
+              <button 
+                onClick={() => {
+                  setDeleteConfirmationId(null);
+                }}
+                className="flex-1 py-3 text-sm font-bold uppercase tracking-widest text-gray-400 hover:text-[#141414] transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleDeleteInvoice}
+                disabled={isDeleting}
+                className="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold uppercase tracking-widest hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
+              >
+                {isDeleting ? "Deleting..." : "Confirm Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Error Modal */}
       {errorMsg && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

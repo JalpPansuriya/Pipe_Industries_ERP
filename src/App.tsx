@@ -9,6 +9,7 @@ import { Dealers } from './pages/Dealers';
 import { Invoices } from './pages/Invoices';
 import { Payments } from './pages/Payments';
 import { Reports } from './pages/Reports';
+import { Settings } from './pages/Settings';
 
 const ProtectedLayout: React.FC = () => {
   const { isAuthenticated, isInitialized } = useAuth();
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/payments" element={<Payments />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

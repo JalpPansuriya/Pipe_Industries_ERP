@@ -9,7 +9,8 @@ import {
   getDealers, 
   getProducts, 
   addDealer, 
-  createInvoice 
+  createInvoice,
+  getNextInvoiceNumber 
 } from '../services/firestoreService';
 
 export const Invoices: React.FC = () => {
@@ -30,7 +31,7 @@ export const Invoices: React.FC = () => {
   const [newDealerGstin, setNewDealerGstin] = useState('');
   const [newDealerAddress, setNewDealerAddress] = useState('');
   const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
-  const [invoiceNo, setInvoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
+  const [invoiceNo, setInvoiceNo] = useState('');
   const [isGstInclusive, setIsGstInclusive] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -67,16 +68,6 @@ export const Invoices: React.FC = () => {
 
   const updateItem = (index: number, field: string, value: any) => {
     const newItems = [...invoiceItems];
-    
-    if (field === 'qty') {
-      const productId = newItems[index].product_id;
-      const product = products.find(p => p.id === productId);
-      if (product && value > product.stock_qty) {
-        setErrorMsg(`Cannot add more than available stock (${product.stock_qty} ${product.unit})`);
-        return;
-      }
-    }
-
     newItems[index][field] = value;
     if (field === 'product_id') {
       const prod = products.find(p => p.id === value);
@@ -162,13 +153,12 @@ export const Invoices: React.FC = () => {
       setNewDealerName('');
       setNewDealerGstin('');
       setNewDealerAddress('');
-      setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
+      // Number will be refreshed when modal reopens
+      setInvoiceNo('');
       fetchData();
       
-      // Generate AI Summary
       const summary = await generateInvoiceSummary(payload);
       setAiSummary(summary);
-      
       setPrintInvoiceId(newInvoiceId);
     } catch (e: any) {
       console.error(e);
@@ -188,7 +178,11 @@ export const Invoices: React.FC = () => {
           <p className="text-gray-500 mt-1">Generate and manage GST-compliant tax invoices.</p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={async () => {
+            const nextNo = await getNextInvoiceNumber();
+            setInvoiceNo(nextNo);
+            setIsModalOpen(true);
+          }}
           className="flex items-center gap-2 bg-[#141414] text-white px-4 py-2 rounded-lg font-medium hover:bg-black transition-colors"
         >
           <Plus size={18} />
@@ -266,10 +260,6 @@ export const Invoices: React.FC = () => {
           <div className="bg-white rounded-2xl w-full max-w-4xl p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
             <div className="flex justify-between items-center mb-8">
               <h3 className="text-2xl font-bold italic serif">Create Tax Invoice</h3>
-              <div className="text-right">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Invoice No</p>
-                <p className="text-lg font-mono font-bold">{invoiceNo}</p>
-              </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-8">
@@ -323,6 +313,14 @@ export const Invoices: React.FC = () => {
                   )}
                 </div>
                 <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Invoice No</label>
+                  <input 
+                    value={invoiceNo}
+                    onChange={(e) => setInvoiceNo(e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#141414] focus:border-[#141414] text-sm outline-none transition-all font-mono font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Invoice Date</label>
                   <input type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#141414] focus:border-[#141414] text-sm outline-none transition-all" />
                 </div>
@@ -363,7 +361,7 @@ export const Invoices: React.FC = () => {
                           className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:ring-1 focus:ring-[#141414] focus:border-[#141414] text-xs outline-none transition-all"
                         >
                           <option value="">Select Product</option>
-                          {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.stock_qty} left)</option>)}
+                          {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                       </div>
                       <div className="w-[60px] md:col-span-1 space-y-1">

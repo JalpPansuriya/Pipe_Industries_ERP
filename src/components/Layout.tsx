@@ -9,7 +9,8 @@ import {
   BarChart3, 
   LogOut,
   Menu,
-  X
+  X,
+  Settings as SettingsIcon
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
@@ -21,6 +22,7 @@ const navItems = [
   { name: 'Invoices', path: '/invoices', icon: FileText, roles: ['Admin', 'Sales Manager', 'Accountant'] },
   { name: 'Payments', path: '/payments', icon: CreditCard, roles: ['Admin', 'Accountant'] },
   { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['Admin'] },
+  { name: 'Settings', path: '/settings', icon: SettingsIcon, roles: ['Admin'] },
 ];
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {

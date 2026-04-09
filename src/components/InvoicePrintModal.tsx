@@ -3,7 +3,7 @@ import { X, Printer, Download } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useAuth } from '../context/AuthContext';
-import { getInvoice } from '../services/firestoreService';
+import { getInvoice, getCompanySettings } from '../services/firestoreService';
 import { formatCurrency, formatDate } from '../lib/utils';
 
 interface InvoicePrintModalProps {
@@ -15,24 +15,29 @@ interface InvoicePrintModalProps {
 export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({ invoiceId, onClose, autoDownload = false }) => {
   const { token } = useAuth();
   const [invoice, setInvoice] = useState<any>(null);
+  const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const fetchInvoice = async () => {
+    const fetchData = async () => {
       try {
-        const data = await getInvoice(invoiceId);
-        setInvoice(data);
+        const [invoiceData, settingsData] = await Promise.all([
+          getInvoice(invoiceId),
+          getCompanySettings()
+        ]);
+        setInvoice(invoiceData);
+        setSettings(settingsData);
       } catch (e: any) {
         console.error(e);
-        setError(e.message || 'Failed to load invoice');
+        setError(e.message || 'Failed to load invoice data');
       } finally {
         setLoading(false);
       }
     };
-    fetchInvoice();
+    fetchData();
   }, [invoiceId]);
 
   const handlePrint = () => {
@@ -281,16 +286,18 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({ invoiceId,
           <div className="border-2 border-black h-full flex flex-col box-border">
             
             {/* Main Header */}
-            <div className="text-center border-b-2 border-black py-2">
-              <h1 className="text-2xl font-extrabold tracking-[0.2em] mb-1">ESTIMATE</h1>
-              <p className="text-sm font-bold uppercase tracking-wider">ESTIMATE</p>
+            <div className="text-center border-b-2 border-black py-2 bg-gray-50/50">
+              <h1 className="text-2xl font-extrabold tracking-[0.15em] mb-0.5 uppercase italic serif">{settings?.companyName || 'SAMRAT PIPE INDUSTRIES'}</h1>
+              <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest leading-tight px-12">
+                {settings?.address || 'Junagadh, Gujarat, India'}
+              </p>
             </div>
 
             {/* GSTIN/State/PAN Line */}
-            <div className="grid grid-cols-[33%_34%_33%] border-b-2 border-black text-[10px] font-bold px-2 py-0.5">
-              <div>GSTIN No. : ____________________</div>
-              <div className="text-center">State : Gujarat &nbsp;&nbsp;&nbsp; State Code : 24</div>
-              <div className="text-right">PAN No. : ____________________</div>
+            <div className="grid grid-cols-[33%_34%_33%] border-b-2 border-black text-[10px] font-bold px-2 py-0.5 whitespace-nowrap overflow-hidden">
+              <div>GSTIN No. : {settings?.gstin || '____________________'}</div>
+              <div className="text-center">State : {settings?.state || 'Gujarat'} &nbsp;&nbsp;&nbsp; State Code : {settings?.stateCode || '24'}</div>
+              <div className="text-right">PAN No. : {settings?.pan || '____________________'}</div>
             </div>
 
             {/* Title Bar: Debit Memo | Tax Invoice | ORIGINAL */}
@@ -342,7 +349,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({ invoiceId,
                     <th className="w-32 py-1 text-right pr-2">Amount</th>
                   </tr>
                 </thead>
-                <tbody className="relative">
+                <tbody className="relative min-h-[300px]">
                   {invoice.items.map((item: any, index: number) => {
                     const qty = Number(item.qty) || 0;
                     const rate = Number(item.rate) || 0;
@@ -359,16 +366,16 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({ invoiceId,
                       </tr>
                     );
                   })}
-                  {/* Fill blank rows to keep table lines extending downwards */}
-                  {Array.from({ length: Math.max(0, 10 - invoice.items.length) }).map((_, i) => (
+                  {/* Fill blank rows to exactly reach fixed height */}
+                  {Array.from({ length: Math.max(0, 16 - invoice.items.length) }).map((_, i) => (
                     <tr key={`fill-${i}`}>
-                      <td className="border-r-2 border-black py-1 h-6"></td>
-                      <td className="border-r-2 border-black px-2 py-1"></td>
-                      <td className="border-r-2 border-black text-center py-1"></td>
-                      <td className="border-r-2 border-black text-right pr-2 py-1"></td>
-                      <td className="border-r-2 border-black text-center py-1"></td>
-                      <td className="border-r-2 border-black text-right pr-2 py-1"></td>
-                      <td></td>
+                      <td className="border-r-2 border-black h-5"></td>
+                      <td className="border-r-2 border-black px-2 h-5"></td>
+                      <td className="border-r-2 border-black text-center h-5"></td>
+                      <td className="border-r-2 border-black text-right pr-2 h-5"></td>
+                      <td className="border-r-2 border-black text-center h-5"></td>
+                      <td className="border-r-2 border-black text-right pr-2 h-5"></td>
+                      <td className="h-5"></td>
                     </tr>
                   ))}
                 </tbody>
@@ -377,15 +384,21 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({ invoiceId,
 
             {/* Totals Section */}
             <div className="border-t-2 border-black">
-              <div className="grid grid-cols-[1fr_210px_128px] h-20">
-                <div className="bg-white border-r-2 border-black"></div>
-                <div className="flex flex-col font-extrabold uppercase text-[11px]">
-                  <div className="border-r-2 border-black border-b-2 flex-1 flex items-center justify-end pr-4">Sub Total</div>
-                  <div className="border-r-2 border-black flex-1 flex items-center justify-end pr-4">Grand Total</div>
+              <div className="grid grid-cols-[1fr_210px_128px]">
+                <div className="bg-white border-r-2 border-black p-2 flex items-center">
+                  <span className="text-[10px] font-bold italic opacity-60">Verified Tax Invoice</span>
                 </div>
-                <div className="flex flex-col font-extrabold text-[11px] text-right">
-                  <div className="border-b-2 border-black flex-1 flex items-center justify-end pr-2">{Number(invoice.total).toFixed(2)}</div>
-                  <div className="flex-1 flex items-center justify-end pr-2">{Number(invoice.total).toFixed(2)}</div>
+                <div className="flex flex-col font-extrabold uppercase text-[10px]">
+                  <div className="border-r-2 border-black border-b flex-1 flex items-center justify-end pr-4 py-1">Sub Total</div>
+                  <div className="border-r-2 border-black border-b flex-1 flex items-center justify-end pr-4 py-1">Output CGST ({(invoice.items[0]?.gst_rate / 2).toFixed(1)}%)</div>
+                  <div className="border-r-2 border-black border-b flex-1 flex items-center justify-end pr-4 py-1">Output SGST ({(invoice.items[0]?.gst_rate / 2).toFixed(1)}%)</div>
+                  <div className="border-r-2 border-black flex-1 flex items-center justify-end pr-4 py-1 bg-gray-50">Grand Total</div>
+                </div>
+                <div className="flex flex-col font-extrabold text-[10px] text-right">
+                  <div className="border-b flex-1 flex items-center justify-end pr-2 py-1">{(Number(invoice.total) - Number(invoice.gst)).toFixed(2)}</div>
+                  <div className="border-b flex-1 flex items-center justify-end pr-2 py-1">{(Number(invoice.gst) / 2).toFixed(2)}</div>
+                  <div className="border-b flex-1 flex items-center justify-end pr-2 py-1">{(Number(invoice.gst) / 2).toFixed(2)}</div>
+                  <div className="flex-1 flex items-center justify-end pr-2 py-1 bg-gray-50">{Number(invoice.total).toFixed(2)}</div>
                 </div>
               </div>
             </div>
@@ -397,17 +410,19 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({ invoiceId,
             </div>
 
             {/* Signature & T&C */}
-            <div className="grid grid-cols-3 text-[11px] p-2 min-h-[100px]">
+            <div className="grid grid-cols-3 text-[11px] p-2 min-h-[80px]">
               <div>
                 <div className="font-extrabold underline mb-1">Terms & Conditions</div>
-                <div className="font-bold">Subject to JUNAGADH jurisdiction.</div>
+                <div className="font-bold text-[9px] leading-tight max-w-[200px]">
+                  {settings?.terms || 'Subject to JUNAGADH jurisdiction.'}
+                </div>
               </div>
               <div className="flex items-end justify-center font-extrabold pb-2">
                 E. & O. E.
               </div>
               <div className="flex flex-col justify-between items-end">
-                <div className="font-extrabold">For, ESTIMATE</div>
-                <div className="font-extrabold uppercase border-t border-black pt-1 w-full text-center mt-auto">Authorised Signatory</div>
+                <div className="font-extrabold text-[10px]">For, {settings?.companyName || 'SAMRAT PIPE INDUSTRIES'}</div>
+                <div className="font-extrabold uppercase border-t border-black pt-1 w-full text-center mt-auto text-[10px]">Authorised Signatory</div>
               </div>
             </div>
           </div>

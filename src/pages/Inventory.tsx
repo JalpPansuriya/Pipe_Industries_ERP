@@ -73,7 +73,7 @@ export const Inventory: React.FC = () => {
         unit: data.unit as string,
         hsn_code: data.hsn_code as string,
         price: parseFloat(data.price as string),
-        stock_qty: parseInt(data.stock_qty as string, 10) || 0,
+        stock_qty: Number(data.stock_qty) || 0,
         low_stock_threshold: parseInt(data.low_stock_threshold as string, 10) || 10
       };
 
@@ -112,7 +112,6 @@ export const Inventory: React.FC = () => {
     if (products.length === 0 || !printRef.current) return;
     
     setIsExporting(true);
-    // Wait for state update to show print template
     setTimeout(async () => {
       try {
         const canvas = await html2canvas(printRef.current!, {
@@ -121,12 +120,10 @@ export const Inventory: React.FC = () => {
           backgroundColor: '#ffffff',
           logging: false
         });
-        
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        
         pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
         pdf.save(`Product_Catalogue_${new Date().toISOString().split('T')[0]}.pdf`);
       } catch (e) {
@@ -167,7 +164,6 @@ export const Inventory: React.FC = () => {
         </div>
       </div>
 
-      {/* Search and Filters */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -181,7 +177,6 @@ export const Inventory: React.FC = () => {
         </div>
       </div>
 
-      {/* Product Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
         <table className="w-full text-left border-collapse whitespace-nowrap min-w-[800px]">
           <thead>
@@ -191,6 +186,7 @@ export const Inventory: React.FC = () => {
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Product Name</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-center">HSN Code</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Price</th>
+              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-center">Stock</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-right">Actions</th>
             </tr>
           </thead>
@@ -202,8 +198,16 @@ export const Inventory: React.FC = () => {
                 <td className="px-6 py-4 text-sm font-bold text-[#141414]">{product.name}</td>
                 <td className="px-6 py-4 text-sm font-bold text-center text-gray-500">{product.hsn_code || '---'}</td>
                 <td className="px-6 py-4 text-sm font-bold text-[#141414]">{formatCurrency(product.price)}</td>
+                <td className="px-6 py-4 text-center">
+                  <span className={cn(
+                    "px-2 py-1 rounded-full text-xs font-bold",
+                    product.stock_qty <= (product.low_stock_threshold || 10) ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                  )}>
+                    {product.stock_qty} {product.unit}
+                  </span>
+                </td>
                 <td className="px-6 py-4 text-right">
-                  <div className="flex justify-end gap-2 transition-opacity">
+                  <div className="flex justify-end gap-2">
                     <button 
                       onClick={() => {
                         setSelectedProduct(product);
@@ -211,7 +215,6 @@ export const Inventory: React.FC = () => {
                         setIsHistoryModalOpen(true);
                       }}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                      title="Billing History"
                     >
                       <History size={18} />
                     </button>
@@ -220,14 +223,12 @@ export const Inventory: React.FC = () => {
                         <button 
                           onClick={() => { setEditingProduct(product); setIsModalOpen(true); }}
                           className="p-2 text-gray-400 hover:text-[#141414] hover:bg-gray-100 rounded-lg transition-all"
-                          title="Edit Product"
                         >
                           <Edit2 size={18} />
                         </button>
                         <button 
                           onClick={() => handleDeleteProduct(product.id)}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                          title="Delete Product"
                         >
                           <Trash2 size={18} />
                         </button>
@@ -241,7 +242,6 @@ export const Inventory: React.FC = () => {
         </table>
       </div>
 
-      {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl">
@@ -273,16 +273,16 @@ export const Inventory: React.FC = () => {
                   <input name="category" defaultValue={editingProduct?.category || 'General'} className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Price (₹)</label>
-                <input name="price" type="number" step="0.01" defaultValue={editingProduct?.price} required className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
-              </div>
-              {!editingProduct && (
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Initial Stock</label>
-                  <input name="stock_qty" type="number" min="0" defaultValue={0} className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Price (₹)</label>
+                  <input name="price" type="number" step="0.01" defaultValue={editingProduct?.price} required className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
                 </div>
-              )}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Current Stock</label>
+                  <input name="stock_qty" type="number" step="0.001" defaultValue={editingProduct?.stock_qty || 0} className="w-full px-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-[#141414] text-sm" />
+                </div>
+              </div>
               <div className="flex gap-3 pt-4">
                 <button 
                   type="button" 
@@ -292,18 +292,7 @@ export const Inventory: React.FC = () => {
                   Cancel
                 </button>
                 <button 
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    const form = e.currentTarget.closest('form');
-                    if (form) {
-                      if (form.checkValidity()) {
-                        form.requestSubmit();
-                      } else {
-                        form.reportValidity();
-                      }
-                    }
-                  }}
+                  type="submit"
                   className="flex-1 bg-[#141414] text-white py-2 rounded-lg font-bold uppercase tracking-widest hover:bg-black transition-colors"
                 >
                   Save Product
@@ -314,7 +303,6 @@ export const Inventory: React.FC = () => {
         </div>
       )}
 
-      {/* History Modal */}
       {isHistoryModalOpen && selectedProduct && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -323,12 +311,7 @@ export const Inventory: React.FC = () => {
                 <h3 className="text-xl font-bold text-[#141414]">Stock History</h3>
                 <p className="text-sm text-gray-500">{selectedProduct.name} ({selectedProduct.sku})</p>
               </div>
-              <button
-                onClick={() => setIsHistoryModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ×
-              </button>
+              <button onClick={() => setIsHistoryModalOpen(false)} className="text-gray-400 hover:text-gray-600">×</button>
             </div>
             <div className="p-6 overflow-y-auto">
               {transactions.length > 0 ? (
@@ -368,29 +351,19 @@ export const Inventory: React.FC = () => {
               )}
             </div>
             <div className="p-6 border-t border-gray-100 flex justify-end">
-              <button
-                onClick={() => setIsHistoryModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Close
-              </button>
+              <button onClick={() => setIsHistoryModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Close</button>
             </div>
           </div>
         </div>
       )}
-      {/* Error Modal */}
+
       {errorMsg && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-xl font-bold text-red-600 mb-4">Error</h3>
             <p className="text-gray-600 mb-6">{errorMsg}</p>
             <div className="flex justify-end">
-              <button
-                onClick={() => setErrorMsg(null)}
-                className="bg-[#141414] text-white px-4 py-2 rounded-lg font-medium hover:bg-black transition-colors"
-              >
-                Close
-              </button>
+              <button onClick={() => setErrorMsg(null)} className="bg-[#141414] text-white px-4 py-2 rounded-lg font-medium hover:bg-black transition-colors">Close</button>
             </div>
           </div>
         </div>
@@ -408,7 +381,6 @@ export const Inventory: React.FC = () => {
               <p className="text-sm font-bold">{new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
             </div>
           </div>
-          
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-gray-200 text-left">
@@ -431,7 +403,6 @@ export const Inventory: React.FC = () => {
               ))}
             </tbody>
           </table>
-          
           <div className="mt-12 pt-8 border-t border-gray-100 flex justify-between items-center text-[10px] uppercase tracking-widest text-gray-400">
             <p>© {new Date().getFullYear()} SAMRAT PIPE INDUSTRIES</p>
             <p>Generated by ERP System</p>
@@ -439,25 +410,14 @@ export const Inventory: React.FC = () => {
         </div>
       </div>
 
-      {/* Confirm Modal */}
       {confirmAction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-xl font-bold text-[#141414] mb-4">Confirm Action</h3>
             <p className="text-gray-600 mb-6">{confirmAction.message}</p>
             <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setConfirmAction(null)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmAction.onConfirm}
-                className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors"
-              >
-                Confirm
-              </button>
+              <button onClick={() => setConfirmAction(null)} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg">Cancel</button>
+              <button onClick={confirmAction.onConfirm} className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors">Confirm</button>
             </div>
           </div>
         </div>

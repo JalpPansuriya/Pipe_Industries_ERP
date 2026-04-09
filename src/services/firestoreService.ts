@@ -13,7 +13,8 @@ import {
   runTransaction,
   serverTimestamp,
   Timestamp,
-  increment
+  increment,
+  setDoc
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
@@ -67,6 +68,31 @@ const dealersRef = collection(db, "dealers");
 const invoicesRef = collection(db, "invoices");
 const paymentsRef = collection(db, "payments");
 const ledgerRef = collection(db, "ledger");
+const settingsRef = collection(db, "settings");
+
+// --- Company Settings Services ---
+export const getCompanySettings = async () => {
+  const docRef = doc(db, "settings", "company");
+  const snap = await getDoc(docRef);
+  if (snap.exists()) {
+    return snap.data();
+  }
+  // Default values
+  return {
+    companyName: 'SAMRAT PIPE INDUSTRIES',
+    address: 'Junagadh, Gujarat, India',
+    gstin: '',
+    state: 'Gujarat',
+    stateCode: '24',
+    pan: '',
+    terms: 'Subject to JUNAGADH jurisdiction.'
+  };
+};
+
+export const updateCompanySettings = async (settings: any) => {
+  const docRef = doc(db, "settings", "company");
+  return await setDoc(docRef, settings, { merge: true });
+};
 
 // --- Product Services ---
 export const getProducts = async (): Promise<Product[]> => {
@@ -98,7 +124,8 @@ export const adjustStock = async (productId: string, quantity: number, type: 'IN
     const currentStock = productDoc.data().stock_qty || 0;
     const newStock = type === 'IN' ? currentStock + quantity : currentStock - quantity;
     
-    if (newStock < 0) throw new Error("Insufficient stock for this adjustment");
+    // Constraint removed as per user request to unlink inventory
+    // if (newStock < 0) throw new Error("Insufficient stock for this adjustment");
     
     transaction.update(productRef, { stock_qty: newStock });
     
@@ -173,6 +200,25 @@ export const getInvoice = async (id: string): Promise<Invoice> => {
   const snap = await getDoc(docRef);
   if (!snap.exists()) throw new Error("Invoice not found");
   return { id: snap.id, ...snap.data() } as Invoice;
+};
+
+export const getNextInvoiceNumber = async (): Promise<string> => {
+  const q = query(invoicesRef, orderBy("invoice_no", "desc"), limit(1));
+  const snapshot = await getDocs(q);
+  
+  if (snapshot.empty) {
+    return "INV-0001";
+  }
+
+  const lastInvoiceNo = snapshot.docs[0].data().invoice_no;
+  const match = lastInvoiceNo.match(/INV-(\d+)/);
+  
+  if (!match) {
+    return "INV-0001";
+  }
+
+  const nextSeq = parseInt(match[1], 10) + 1;
+  return `INV-${nextSeq.toString().padStart(4, '0')}`;
 };
 
 export const createInvoice = async (invoiceData: Omit<Invoice, 'id'>) => {
